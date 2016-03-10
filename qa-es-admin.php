@@ -15,18 +15,18 @@ class qa_elasticsearch {
 			$this->es_hostname = qa_opt('elasticsearch_hostname');
 			$this->es_port = qa_opt('elasticsearch_port');
 			$this->es_index_name = qa_opt('elasticsearch_index_name');
-			$this->es_client = create_es_client($this->es_hostname, $this->es_port);
+			$this->es_client = create_es_client($this->es_hostname, $this->es_port, qa_opt('elasticsearch_aws_region'), qa_opt('elasticsearch_aws_key'), qa_opt('elasticsearch_aws_secret'));
 			$params = array( 'index' => $this->es_index_name);
 			if ( !$this->es_client->indices()->exists($params))
 				$this->es_client->indices()->create($params);
 		}
 	}
-	
+
 	function allow_template($template)
 	{
 		return ($template!='admin');
 	}
-	
+
 	function option_default($option) {
 		switch($option) {
 			case 'elasticsearch_hostname':
@@ -51,9 +51,12 @@ class qa_elasticsearch {
 			qa_opt('elasticsearch_hostname',qa_post_text('elasticsearch_hostname'));
 			qa_opt('elasticsearch_port',qa_post_text('elasticsearch_port'));
 			qa_opt('elasticsearch_index_name',qa_post_text('elasticsearch_index_name'));
+			qa_opt('elasticsearch_aws_region',qa_post_text('elasticsearch_aws_region'));
+			qa_opt('elasticsearch_aws_key',qa_post_text('elasticsearch_aws_key'));
+			qa_opt('elasticsearch_aws_secret',qa_post_text('elasticsearch_aws_secret'));
 			qa_opt('elasticsearch_enabled',$is_es_enabled);
-			if ( $is_es_enabled ) { 
-			   qa_opt('search_module', 'qa_elasticsearch');	
+			if ( $is_es_enabled ) {
+			   qa_opt('search_module', 'qa_elasticsearch');
 			}
 			$ok = qa_lang('admin/options_saved');
 		}
@@ -62,7 +65,7 @@ class qa_elasticsearch {
 				$def = $this->option_default($i);
 				if($def !== null) qa_opt($i,$def);
 			}
-			qa_opt('search_module', '');	
+			qa_opt('search_module', '');
 			$ok = qa_lang('admin/options_reset');
 		}
 
@@ -94,6 +97,24 @@ class qa_elasticsearch {
 				'value' => qa_opt('elasticsearch_index_name'),
 				'type' => 'input',
 				);
+		$fields[] = array(
+				'label' => 'AWS region',
+				'tags' => 'NAME="elasticsearch_aws_region"',
+				'value' => qa_opt('elasticsearch_aws_region'),
+				'type' => 'input',
+			);
+		$fields[] = array(
+				'label' => 'AWS region',
+				'tags' => 'NAME="elasticsearch_aws_key"',
+				'value' => qa_opt('elasticsearch_aws_key'),
+				'type' => 'input',
+		);
+		$fields[] = array(
+				'label' => 'AWS region',
+				'tags' => 'NAME="elasticsearch_aws_secret"',
+				'value' => qa_opt('elasticsearch_aws_secret'),
+				'type' => 'input',
+		);
 		return array(
 				'ok' => ($ok && !isset($error)) ? $ok : null,
 
@@ -109,10 +130,11 @@ class qa_elasticsearch {
 						'tags' => 'NAME="accept_reset_button"',
 					     ),
 					),
-			    );
+			);
 	}
 
 	public function index_post($postid, $type, $questionid, $parentid, $title, $content, $format, $text, $tagstring, $categoryid) {
+
 		$this->create_es_client_if_needed();
 		$params = array();
 		$params['body']  = array(
@@ -125,13 +147,12 @@ class qa_elasticsearch {
 		     'categoryid' => $categoryid,
 		     'parentid' => $parentid,
 		     'postid' => $postid,
-		     'type' => $type	
+		     'type' => $type
 		);
 
 		$params['index'] = $this->es_index_name;
 		$params['type']  = 'post';
 		$params['id']    = $postid;
-
 		// Document will be indexed to my_index/my_type/my_id
 		$ret = $this->es_client->index($params);
 	}
@@ -142,8 +163,13 @@ class qa_elasticsearch {
 		$deleteParams['index'] = $this->es_index_name;
 		$deleteParams['type'] = 'post';
 		$deleteParams['id'] = $postid;
-		if ( $this->es_client->exists($deleteParams)) 
-			$retDelete = $this->es_client->delete($deleteParams);
+		try {
+			if ( $this->es_client->exists($deleteParams))
+				$retDelete = $this->es_client->delete($deleteParams);
+		}
+		catch(GuzzleHttp\Exception\ClientException $e) {
+			// Nothing todo
+		}
 	}
 
 	public function move_post($postid, $categoryid) {
@@ -152,11 +178,11 @@ class qa_elasticsearch {
 		$params['index'] = $this->es_index_name;
                 $params['type']  = 'post';
                 $params['id']    = $postid;
-		
+
 		if ( $this->es_client->exists($params)) {
 		   $params['body'] = array ('categoryid' => $categoryid);
-		   $this->es_client->update($params);	
-		}	
+		   $this->es_client->update($params);
+		}
 	}
 
 	public function process_search($query, $start, $count, $userid, $absoluteurls, $fullcontent) {
@@ -165,8 +191,8 @@ class qa_elasticsearch {
 		$params['index'] = $this->es_index_name;
 		$params['type']  = 'post';
 		$params['body']['query']['multi_match'] = array ( 'query' => $query , 'fields' => array('title','content','text'));
-        $params['from'] = $start;
-        $params['size'] = $count;
+    $params['from'] = $start;
+    $params['size'] = $count;
 		$es_results = $this->es_client->search($params);
 
 		$total_found = $es_results['hits']['total'];
@@ -182,5 +208,5 @@ class qa_elasticsearch {
 		}
 		return $results;
 	}
-	
+
 }
