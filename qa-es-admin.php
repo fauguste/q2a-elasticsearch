@@ -17,8 +17,14 @@ class qa_elasticsearch {
 			$this->es_index_name = qa_opt('elasticsearch_index_name');
 			$this->es_client = create_es_client($this->es_hostname, $this->es_port, qa_opt('elasticsearch_aws_region'), qa_opt('elasticsearch_aws_key'), qa_opt('elasticsearch_aws_secret'));
 			$params = array( 'index' => $this->es_index_name);
-			if ( !$this->es_client->indices()->exists($params))
-				$this->es_client->indices()->create($params);
+			try {
+				if ( !$this->es_client->indices()->exists($params)) {
+					$this->es_client->indices()->create($params);
+				}
+			}
+			catch(GuzzleHttp\Exception\ClientException $e) {
+				$this->es_client->indices()->create($params)
+			}
 		}
 	}
 
@@ -134,8 +140,10 @@ class qa_elasticsearch {
 	}
 
 	public function index_post($postid, $type, $questionid, $parentid, $title, $content, $format, $text, $tagstring, $categoryid) {
-
 		$this->create_es_client_if_needed();
+		if(!$this->es_enabled) {
+				return;
+		}
 		$params = array();
 		$params['body']  = array(
 		     'questionid' => $questionid,
@@ -159,6 +167,9 @@ class qa_elasticsearch {
 
 	public function unindex_post($postid) {
 		$this->create_es_client_if_needed();
+		if(!$this->es_enabled) {
+				return;
+		}
 		$deleteParams = array();
 		$deleteParams['index'] = $this->es_index_name;
 		$deleteParams['type'] = 'post';
@@ -174,6 +185,9 @@ class qa_elasticsearch {
 
 	public function move_post($postid, $categoryid) {
 		$this->create_es_client_if_needed();
+		if(!$this->es_enabled) {
+				return;
+		}
 		$params = array();
 		$params['index'] = $this->es_index_name;
                 $params['type']  = 'post';
@@ -187,6 +201,9 @@ class qa_elasticsearch {
 
 	public function process_search($query, $start, $count, $userid, $absoluteurls, $fullcontent) {
 		$this->create_es_client_if_needed();
+		if(!$this->es_enabled) {
+				return;
+		}
 		$results = array();
 		$params['index'] = $this->es_index_name;
 		$params['type']  = 'post';

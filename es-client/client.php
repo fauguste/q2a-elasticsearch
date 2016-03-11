@@ -1,5 +1,4 @@
 <?php
-require 'vendor/autoload.php';
 
 use Aws\Credentials\Credentials;
 use Aws\Credentials\CredentialProvider;
@@ -12,6 +11,8 @@ use Psr\Http\Message\ResponseInterface;
 
 // Documentation : https://docs.aws.amazon.com/aws-sdk-php/v3/guide/service/es-data-plane.html
 function create_es_client ( $host , $port, $region, $key, $secret ) {
+    require 'vendor/autoload.php';
+    
     $psr7Handler = Aws\default_http_handler();
     $signer = new SignatureV4('es', $region);
     //$credentialProvider = CredentialProvider::defaultProvider();
